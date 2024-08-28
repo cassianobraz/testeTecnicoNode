@@ -2,7 +2,13 @@
 @baseUrl = http://localhost:3333
 
 ### Receive an image and consult in Gemini and return the measurement read by the API
-POST {{baseUrl}}/uploud
+POST {{baseUrl}}/upload
+Content-Type: application/json
+
+{
+  "base64Image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4FQAAAAABJRU5ErkJggg==",
+  "readingType": "temperature"
+}
 
 ### Confirm or correct the value read by LLM
 PATCH {{baseUrl}}/confirm

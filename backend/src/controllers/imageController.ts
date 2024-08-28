@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
-import { uploadImageToGoogleCloud } from '../services/googleCloudStorage'
+import { analyzeImageWithGoogleGemini } from '../services/googleGeminiService'
 import { v4 as uuidv4 } from 'uuid'
 
 const prisma = new PrismaClient()
@@ -43,9 +43,9 @@ export const uploadImage = async (req: Request, res: Response) => {
         .json({ error: 'Reading already exists for this month.' })
     }
 
-    // Chamada para o Google Gemini ou API de LLM
+    // Chamada para a API do Google Gemini Vision
     const { numericValue, imageLink } =
-      await uploadImageToGoogleCloud(base64Image)
+      await analyzeImageWithGoogleGemini(base64Image)
 
     // Salvar a nova leitura no banco de dados
     const newReading = await prisma.reading.create({
@@ -63,8 +63,9 @@ export const uploadImage = async (req: Request, res: Response) => {
     })
   } catch (error) {
     console.error('Error uploading image:', error)
-    res
-      .status(500)
-      .json({ error: 'Failed to upload image and process reading.' })
+    res.status(500).json({
+      error: 'Failed to upload image and process reading.',
+      details: error.message,
+    })
   }
 }
