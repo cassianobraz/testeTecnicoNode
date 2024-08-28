@@ -1,6 +1,10 @@
 import { Router } from 'express'
-import { analyzeImage } from '../controllers/imageController'
+import { uploadImage } from '../controllers/imageController'
 
 export const router = Router()
 
-router.get('/analyze', analyzeImage)
+router.post('/upload', uploadImage)
+
+router.patch('/confirm', uploadImage)
+
+router.get('/:id/list', uploadImage)

@@ -1,3 +1,11 @@
-### Teste
+### Variable
+@baseUrl = http://localhost:3333
 
-GET http://localhost:3333/analyze
+### Receive an image and consult in Gemini and return the measurement read by the API
+POST {{baseUrl}}/uploud
+
+### Confirm or correct the value read by LLM
+PATCH {{baseUrl}}/confirm
+
+### Lists the measurements performed by a specific client
+GET {{baseUrl}}/<customer code>/list
