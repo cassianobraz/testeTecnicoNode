@@ -14,7 +14,7 @@ export const analyzeImageWithGoogleGemini = async (base64Image: string) => {
         requests: [
           {
             image: {
-              content: base64Image.split(',')[ 1 ],
+              content: base64Image.split(',')[1],
             },
             features: [
               {

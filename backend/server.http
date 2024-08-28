@@ -6,12 +6,26 @@ POST {{baseUrl}}/upload
 Content-Type: application/json
 
 {
-  "base64Image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4FQAAAAABJRU5ErkJggg==",
-  "readingType": "temperature"
+  "image": "data:image/jpeg;base64,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",
+  "customer_code": "customer123",
+  "measure_datetime": "2024-08-28T10:00:00Z",
+  "measure_type": "WATER"
 }
 
 ### Confirm or correct the value read by LLM
 PATCH {{baseUrl}}/confirm
+Content-Type: application/json
+
+{
+  "measure_uuid": "example-uuid",
+  "confirmed_value": 123
+}
 
 ### Lists the measurements performed by a specific client
-GET {{baseUrl}}/<customer code>/list
+### List measurements for a specific client
+GET {{baseUrl}}/{customer_code}/list?measure_type=WATER
+Accept: application/json
+
+### List measures for a specific customer without type filter
+GET {{baseUrl}}/{customer_code}/list
+Accept: application/json

@@ -8,8 +8,16 @@ generator client {
 }
 
 model Reading {
-  id        Int      @id @default(autoincrement())
-  type      String
-  value     Float
-  createdAt DateTime @default(now())
+  id               Int      @id @default(autoincrement())
+  uuid             String   @unique
+  type             String
+  customerCode     String
+  value            Float
+  measureDatetime  DateTime
+  imageUrl         String
+  confirmedValue   Float? 
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([uuid])   
 }
