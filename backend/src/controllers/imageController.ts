@@ -9,7 +9,6 @@ export const uploadImage = async (req: Request, res: Response) => {
   try {
     const { base64Image, readingType } = req.body
 
-    // Validação dos parâmetros
     if (
       !base64Image ||
       typeof base64Image !== 'string' ||
@@ -22,7 +21,6 @@ export const uploadImage = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid reading type.' })
     }
 
-    // Verificar se já existe uma leitura no mês para o tipo de leitura
     const startOfMonth = new Date(
       new Date().getFullYear(),
       new Date().getMonth(),
@@ -43,11 +41,10 @@ export const uploadImage = async (req: Request, res: Response) => {
         .json({ error: 'Reading already exists for this month.' })
     }
 
-    // Chamada para a API do Google Gemini Vision
     const { numericValue, imageLink } =
       await analyzeImageWithGoogleGemini(base64Image)
 
-    // Salvar a nova leitura no banco de dados
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const newReading = await prisma.reading.create({
       data: {
         type: readingType,
@@ -55,7 +52,6 @@ export const uploadImage = async (req: Request, res: Response) => {
       },
     })
 
-    // Responder com os dados requeridos
     res.status(200).json({
       imageLink,
       guid: uuidv4(),

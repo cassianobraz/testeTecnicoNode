@@ -1,11 +1,9 @@
 import axios from 'axios'
 
-const GOOGLE_GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-if (!GOOGLE_GEMINI_API_KEY) {
-  throw new Error(
-    'GOOGLE_GEMINI_API_KEY is not defined in environment variables.',
-  )
+if (!GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY is not defined in environment variables.')
 }
 
 export const analyzeImageWithGoogleGemini = async (base64Image: string) => {
@@ -16,11 +14,11 @@ export const analyzeImageWithGoogleGemini = async (base64Image: string) => {
         requests: [
           {
             image: {
-              content: base64Image.split(',')[ 1 ], // Remove 'data:image/png;base64,' prefix
+              content: base64Image.split(',')[ 1 ],
             },
             features: [
               {
-                type: 'DOCUMENT_TEXT_DETECTION', // Ou o tipo de detecção que você está usando
+                type: 'DOCUMENT_TEXT_DETECTION',
               },
             ],
           },
@@ -31,7 +29,7 @@ export const analyzeImageWithGoogleGemini = async (base64Image: string) => {
           'Content-Type': 'application/json',
         },
         params: {
-          key: process.env.GOOGLE_GEMINI_API_KEY, // Certifique-se de que a chave está correta
+          key: process.env.GEMINI_API_KEY,
         },
       },
     )
