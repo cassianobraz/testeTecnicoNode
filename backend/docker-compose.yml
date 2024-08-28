@@ -7,3 +7,6 @@ services:
       - POSTGRESQL_USERNAME=docker
       - POSTGRESQL_PASSWORD=docker
       - POSTGRESQL_DATABASE=shopper
+      - PGDATA=/data/postgres
+    volumes: 
+      - ./data/pg:/data/postgres
