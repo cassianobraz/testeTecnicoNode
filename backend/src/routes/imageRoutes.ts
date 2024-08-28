@@ -5,6 +5,6 @@ export const router = Router()
 
 router.post('/upload', uploadImage)
 
-router.patch('/confirm', uploadImage)
+router.patch('/confirm')
 
-router.get('/:id/list', uploadImage)
+router.get('/:id/list')
