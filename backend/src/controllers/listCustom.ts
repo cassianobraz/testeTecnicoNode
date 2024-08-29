@@ -9,7 +9,7 @@ export const listCustom = async (req: Request, res: Response) => {
 
   if (
     measure_type &&
-    ![ 'WATER', 'GAS' ].includes((measure_type as string).toUpperCase())
+    !['WATER', 'GAS'].includes((measure_type as string).toUpperCase())
   ) {
     return res.status(400).json({
       error_code: 'INVALID_TYPE',
