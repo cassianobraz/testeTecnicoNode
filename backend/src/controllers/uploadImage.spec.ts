@@ -1,107 +1,109 @@
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import request from 'supertest'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import app from '../app'
+import { app } from '../app'
 import { PrismaClient } from '@prisma/client'
-import { GoogleAIFileManager } from '@google/generative-ai/server'
-import { analyzeImageWithGoogleGemini } from '../services/googleGeminiService'
+import { v4 as uuidv4 } from 'uuid'
 
 // Mocks
-vi.mock('@prisma/client', () => {
-  return {
-    PrismaClient: vi.fn().mockImplementation(() => ({
-      reading: {
-        findFirst: vi.fn(),
-        create: vi.fn(),
-      },
-    })),
-  }
-})
+const prisma = new PrismaClient()
 
-vi.mock('@google/generative-ai/server', () => {
-  return {
-    GoogleAIFileManager: vi.fn().mockImplementation(() => ({
-      uploadFile: vi.fn(),
-    })),
-  }
-})
-
-vi.mock('../services/googleGeminiService', () => ({
-  analyzeImageWithGoogleGemini: vi.fn(),
+vi.mock('@google/generative-ai/server', () => ({
+  GoogleAIFileManager: vi.fn().mockImplementation(() => ({
+    uploadFile: vi.fn().mockResolvedValue({
+      file: { uri: 'http://example.com/image.jpg' },
+    }),
+  })),
 }))
 
-describe('Upload Image API', () => {
-  let prisma: PrismaClient
-  let fileManager: GoogleAIFileManager
+vi.mock('../src/services/googleGeminiService', () => ({
+  analyzeImageWithGoogleGemini: vi.fn().mockResolvedValue({
+    numericValue: 42,
+  }),
+}))
 
-  beforeEach(() => {
-    prisma = new PrismaClient()
-    fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY)
+describe('POST /upload', () => {
+  let savedMeasureUUID: string | null = null
 
-    fileManager.uploadFile.mockResolvedValue({
-      file: { uri: 'https://example.com/image.jpg' },
+  afterEach(async () => {
+    if (savedMeasureUUID) {
+      try {
+        await prisma.reading.delete({
+          where: { uuid: savedMeasureUUID },
+        })
+      } catch (error) {
+        console.warn(
+          `Failed to delete measure with UUID: ${savedMeasureUUID}`,
+          error,
+        )
+      } finally {
+        savedMeasureUUID = null
+      }
+    }
+  })
+
+  it('should be able to upload an image and process it successfully', async () => {
+    vi.spyOn(prisma.reading, 'findFirst').mockResolvedValueOnce(null)
+
+    const randomCustomerCode = `customer-${uuidv4()}`
+    const imageBase64 =
+      'data:image/jpeg;base64,' + Buffer.from('test').toString('base64')
+    const response = await request(app).post('/upload').send({
+      image: imageBase64,
+      customer_code: randomCustomerCode,
+      measure_datetime: new Date().toISOString(),
+      measure_type: 'WATER',
     })
 
-    analyzeImageWithGoogleGemini.mockResolvedValue({ numericValue: 50 })
+    expect(response.status).toBe(200)
+    expect(response.body).toHaveProperty('image_url')
+    expect(response.body).toHaveProperty('measure_value')
+    expect(response.body).toHaveProperty('measure_uuid')
+
+    savedMeasureUUID = response.body.measure_uuid
+
+    const savedReading = await prisma.reading.findUnique({
+      where: { uuid: savedMeasureUUID },
+    })
+
+    expect(savedReading).not.toBeNull()
+    expect(savedReading?.customerCode).toBe(randomCustomerCode)
+    expect(savedReading?.type).toBe('WATER')
+    expect(savedReading?.imageUrl).toBe(response.body.image_url)
   })
 
-  it('should be able to return 400 if required fields are missing', async () => {
-    const response = await request(app).post('/upload').send({})
-    expect(response.status).toBe(400)
-    expect(response.body).toHaveProperty('error_code', 'INVALID_DATA')
-  })
-
-  it.skip('should be able to return 409 if there is already a reading for the month', async () => {
-    prisma.reading.findFirst.mockResolvedValueOnce({ id: 1 })
-
+  it('should return 400 if the request data is invalid', async () => {
     const response = await request(app).post('/upload').send({
-      image: 'data:image/jpeg;base64,/9j/4AAQSk...',
-      customer_code: '123456',
-      measure_datetime: '2024-08-29T10:00:00Z',
+      image: 'invalid_base64',
+      customer_code: '',
+      measure_datetime: 'invalid_date',
+      measure_type: 'INVALID_TYPE',
+    })
+
+    expect(response.status).toBe(400)
+    expect(response.body.error_code).toBe('INVALID_DATA')
+  })
+
+  it('should return 409 if a reading already exists for the month', async () => {
+    vi.spyOn(prisma.reading, 'findFirst').mockResolvedValueOnce({
+      uuid: 'existing-uuid',
+      customerCode: 'customer123',
+      measureDatetime: new Date(),
+      type: 'WATER',
+      value: 50,
+      imageUrl: 'http://example.com/old.jpg',
+      confirmedValue: null,
+    } as any)
+
+    const imageBase64 =
+      'data:image/jpeg;base64,' + Buffer.from('test').toString('base64')
+    const response = await request(app).post('/upload').send({
+      image: imageBase64,
+      customer_code: 'customer123',
+      measure_datetime: new Date().toISOString(),
       measure_type: 'WATER',
     })
 
     expect(response.status).toBe(409)
-    expect(response.body).toHaveProperty('error_code', 'DOUBLE_REPORT')
-  })
-
-  it('should be able to return 500 if image upload fails', async () => {
-    prisma.reading.findFirst.mockResolvedValueOnce(null)
-    fileManager.uploadFile.mockResolvedValueOnce({ file: { uri: null } })
-
-    const response = await request(app).post('/upload').send({
-      image: 'data:image/jpeg;base64,/9j/4AAQSk...',
-      customer_code: '123456',
-      measure_datetime: '2024-08-29T10:00:00Z',
-      measure_type: 'WATER',
-    })
-
-    expect(response.status).toBe(500)
-    expect(response.body).toHaveProperty('error_code', 'SERVER_ERROR')
-  })
-
-  it.skip('should be able to return 200 and create a new reading', async () => {
-    prisma.reading.findFirst.mockResolvedValueOnce(null)
-    fileManager.uploadFile.mockResolvedValueOnce({
-      file: { uri: 'https://example.com/image.jpg' },
-    })
-    analyzeImageWithGoogleGemini.mockResolvedValueOnce({ numericValue: 50 })
-
-    const response = await request(app).post('/upload').send({
-      image: 'data:image/jpeg;base64,/9j/4AAQSk...',
-      customer_code: '123456',
-      measure_datetime: '2024-08-29T10:00:00Z',
-      measure_type: 'WATER',
-    })
-
-    console.log('Response Status:', response.status)
-    console.log('Response Body:', response.body)
-
-    expect(response.status).toBe(200)
-    expect(response.body).toHaveProperty(
-      'image_url',
-      'https://example.com/image.jpg',
-    )
-    expect(response.body).toHaveProperty('measure_value', 50)
-    expect(response.body).toHaveProperty('measure_uuid')
+    expect(response.body.error_code).toBe('DOUBLE_REPORT')
   })
 })

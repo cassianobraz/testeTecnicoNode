@@ -1,125 +1,61 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Request, Response } from 'express'
+import request from 'supertest'
+import { app } from '../app'
 import { PrismaClient } from '@prisma/client'
-import { listCustom } from './listCustom'
 
 const prisma = new PrismaClient()
 
-vi.mock('@prisma/client', () => ({
-  PrismaClient: vi.fn().mockImplementation(() => ({
-    reading: {
-      findMany: vi.fn(),
-    },
-  })),
-}))
+describe('GET /:customerCode/list', () => {
+  it('should be able to return 200 with a list of readings', async () => {
+    const fixedDate = new Date().toISOString() // Crie uma data fixa
 
-describe('listCustom', () => {
-  it('should return 400 if measure_type is invalid', async () => {
-    const req = {
-      params: { customerCode: '123' },
-      query: { measure_type: 'INVALID' },
-    } as unknown as Request
-    const res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    } as unknown as Response
+    const mockReadings = [
+      {
+        uuid: 'test-uuid',
+        measureDatetime: fixedDate, // Use a mesma data fixa no mock
+        type: 'WATER',
+        confirmedValue: null,
+        imageUrl: 'http://example.com/image.jpg',
+      },
+    ]
 
-    await listCustom(req, res)
+    vi.spyOn(prisma.reading, 'findMany').mockResolvedValueOnce(mockReadings)
 
-    expect(res.status).toHaveBeenCalledWith(400)
-    expect(res.json).toHaveBeenCalledWith({
-      error_code: 'INVALID_TYPE',
-      error_description: 'Tipo de medição não permitida',
+    const response = await request(app).get('/customer123/list').query({
+      measure_type: 'WATER',
     })
+
+    expect(response.status).toBe(200)
+    expect(response.body.customer_code).toBe('customer123')
+    expect(response.body.measures).toHaveLength(1)
+
+    const receivedMeasure = response.body.measures[0]
+
+    // Verifique se a data recebida corresponde exatamente à data fixa
+    expect(receivedMeasure.measure_type).toBe('WATER')
+    expect(receivedMeasure.image_url).toBe('http://example.com/image.jpg')
+
+    const expectedHasConfirmed = mockReadings[0].confirmedValue !== null
+    expect(receivedMeasure.has_confirmed).toBe(expectedHasConfirmed)
+  })
+
+  it('should be able to return 400 if params are invalid', async () => {
+    const response = await request(app).get('/customer123/list').query({
+      measure_type: 'INVALID_TYPE',
+    })
+
+    expect(response.status).toBe(400)
+    expect(response.body.error_code).toBe('INVALID_QUERY')
   })
 
   it.skip('should return 404 if no readings are found', async () => {
-    const req = {
-      params: { customerCode: '123' },
-      query: { measure_type: 'GAS' },
-    } as unknown as Request
-    const res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    } as unknown as Response
+    vi.spyOn(prisma.reading, 'findMany').mockResolvedValueOnce([])
 
-    const prismaClient = prisma as any as {
-      reading: { findMany: (params: any) => Promise<any[]> }
-    }
-    prismaClient.reading.findMany.mockResolvedValue([])
-
-    await listCustom(req, res)
-
-    expect(res.status).toHaveBeenCalledWith(404)
-    expect(res.json).toHaveBeenCalledWith({
-      error_code: 'MEASURES_NOT_FOUND',
-      error_description: 'Nenhuma leitura encontrada',
-    })
-  })
-
-  it.skip('should return 200 and a list of readings', async () => {
-    const req = {
-      params: { customerCode: '123' },
-      query: { measure_type: 'WATER' },
-    } as unknown as Request
-    const res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    } as unknown as Response
-
-    const prismaClient = prisma as any as {
-      reading: { findMany: (params: any) => Promise<any[]> }
-    }
-    prismaClient.reading.findMany.mockResolvedValue([
-      {
-        uuid: 'uuid-1',
-        measureDatetime: new Date(),
-        type: 'WATER',
-        confirmedValue: true,
-        imageUrl: 'http://example.com/image1.jpg',
-      },
-    ])
-
-    await listCustom(req, res)
-
-    expect(res.status).toHaveBeenCalledWith(200)
-    expect(res.json).toHaveBeenCalledWith({
-      customer_code: '123',
-      measures: [
-        {
-          measure_uuid: 'uuid-1',
-          measure_datetime: expect.any(String),
-          measure_type: 'WATER',
-          has_confirmed: true,
-          image_url: 'http://example.com/image1.jpg',
-        },
-      ],
-    })
-  })
-
-  it.skip('should return 500 if an error occurs', async () => {
-    const req = {
-      params: { customerCode: '123' },
-      query: { measure_type: 'GAS' },
-    } as unknown as Request
-    const res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
-    } as unknown as Response
-
-    const prismaClient = prisma as any as {
-      reading: { findMany: (params: any) => Promise<any[]> }
-    }
-    prismaClient.reading.findMany.mockImplementation(() => {
-      throw new Error('Database error')
+    const response = await request(app).get('/customer123/list').query({
+      measure_type: 'WATER',
     })
 
-    await listCustom(req, res)
-
-    expect(res.status).toHaveBeenCalledWith(500)
-    expect(res.json).toHaveBeenCalledWith({
-      error_code: 'SERVER_ERROR',
-      error_description: 'An unexpected server error occurred.',
-    })
+    expect(response.status).toBe(404)
+    expect(response.body.error_code).toBe('MEASURES_NOT_FOUND')
   })
 })

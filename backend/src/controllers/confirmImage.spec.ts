@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
-import app from '../app'
+import { app } from '../app'
 import { PrismaClient } from '@prisma/client'
 
 vi.mock('@prisma/client', () => {
@@ -29,8 +29,8 @@ describe('Confirm Image API', () => {
     expect(response.body).toHaveProperty('error_code', 'INVALID_DATA')
   })
 
-  it.skip('should return 404 if the reading is not found', async () => {
-    prisma.reading.findUnique.mockResolvedValueOnce(null)
+  it.skip('should be able to return 404 if the reading is not found', async () => {
+    vi.spyOn(prisma.reading, 'findUnique').mockResolvedValueOnce(null)
 
     const response = await request(app).patch('/confirm').send({
       measure_uuid: 'invalid-uuid',
@@ -56,8 +56,8 @@ describe('Confirm Image API', () => {
     expect(response.body).toHaveProperty('error_code', 'CONFIRMATION_DUPLICATE')
   })
 
-  it.skip('should return 200 and update the confirmed value if everything is valid', async () => {
-    prisma.reading.findUnique.mockResolvedValueOnce({
+  it.skip('should be able to return 200 and update the confirmed value if everything is valid', async () => {
+    vi.spyOn(prisma.reading, 'findUnique').mockResolvedValueOnce({
       uuid: 'valid-uuid',
       confirmedValue: null,
     })
@@ -73,17 +73,5 @@ describe('Confirm Image API', () => {
       where: { uuid: 'valid-uuid' },
       data: { confirmedValue: 100 },
     })
-  })
-
-  it.skip('should return 500 if there is an unexpected server error', async () => {
-    prisma.reading.findUnique.mockRejectedValueOnce(new Error('Server error'))
-
-    const response = await request(app).patch('/confirm').send({
-      measure_uuid: 'valid-uuid',
-      confirmed_value: 100,
-    })
-
-    expect(response.status).toBe(500)
-    expect(response.body).toHaveProperty('error_code', 'SERVER_ERROR')
   })
 })

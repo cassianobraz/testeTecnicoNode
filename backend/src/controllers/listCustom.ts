@@ -1,29 +1,53 @@
 import { Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
+import { z } from 'zod'
 
 const prisma = new PrismaClient()
 
-export const listCustom = async (req: Request, res: Response) => {
-  const { customerCode } = req.params
-  const { measure_type } = req.query
+const paramsSchema = z.object({
+  customerCode: z.string().min(1, 'O código do cliente é obrigatório'),
+})
 
-  if (
-    measure_type &&
-    !['WATER', 'GAS'].includes((measure_type as string).toUpperCase())
-  ) {
+const querySchema = z.object({
+  measure_type: z
+    .string()
+    .optional()
+    .refine(
+      (value) => !value || ['WATER', 'GAS'].includes(value.toUpperCase()),
+      'Tipo de medição não permitida',
+    ),
+})
+
+export const listCustom = async (req: Request, res: Response) => {
+  const paramsValidation = paramsSchema.safeParse(req.params)
+  if (!paramsValidation.success) {
     return res.status(400).json({
-      error_code: 'INVALID_TYPE',
-      error_description: 'Tipo de medição não permitida',
+      error_code: 'INVALID_PARAMS',
+      error_description: paramsValidation.error.errors
+        .map((err) => err.message)
+        .join(', '),
     })
   }
+
+  const { customerCode } = paramsValidation.data
+
+  const queryValidation = querySchema.safeParse(req.query)
+  if (!queryValidation.success) {
+    return res.status(400).json({
+      error_code: 'INVALID_QUERY',
+      error_description: queryValidation.error.errors
+        .map((err) => err.message)
+        .join(', '),
+    })
+  }
+
+  const { measure_type } = queryValidation.data
 
   try {
     const measures = await prisma.reading.findMany({
       where: {
         customerCode,
-        ...(measure_type
-          ? { type: (measure_type as string).toUpperCase() }
-          : {}),
+        ...(measure_type ? { type: measure_type.toUpperCase() } : {}),
       },
     })
 
