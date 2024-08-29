@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "tsx watch src/server.ts",
     "build": "tsup src --out-dir build",
-    "dev": "tsx watch src/server.ts",
     "lint": "eslint src --ext .ts --fix",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -14,7 +14,6 @@
   "author": "Cassiano Pereira Braz",
   "license": "ISC",
   "dependencies": {
-    "@google-cloud/storage": "^7.12.1",
     "@google/generative-ai": "^0.17.1",
     "@prisma/client": "^5.19.0",
     "axios": "^1.7.5",
