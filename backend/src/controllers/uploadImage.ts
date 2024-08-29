@@ -1,93 +1,60 @@
 import { Request, Response } from 'express'
-import { analyzeImageWithGoogleGemini } from '../services/googleGeminiService'
-import { uploadImageToGoogle } from '../services/googleFileService'
+import { GoogleAIFileManager } from '@google/generative-ai/server'
 import { v4 as uuidv4 } from 'uuid'
 import { PrismaClient } from '@prisma/client'
+import dotenv from 'dotenv'
+import { analyzeImageWithGoogleGemini } from '../services/googleGeminiService'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+import { z } from 'zod'
+
+dotenv.config()
 
 const prisma = new PrismaClient()
+const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY)
 
-const isValidMeasureType = (type: unknown): boolean => {
-  return [ 'WATER', 'GAS' ].includes(type as string)
-}
-
-const isValidCustomerCode = (code: unknown): boolean => {
-  return typeof code === 'string' && code.trim().length > 0
-}
-
-const isValidDateTime = (datetime: unknown): boolean => {
-  return !isNaN(Date.parse(datetime as string))
-}
+const uploadImageSchema = z.object({
+  image: z.string().refine((val) => val.startsWith('data:image'), {
+    message: 'Base64 image data is required and must start with "data:image".',
+  }),
+  customer_code: z.string().nonempty('Valid customer code is required.'),
+  measure_datetime: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Valid measure datetime is required.',
+  }),
+  measure_type: z.enum(['WATER', 'GAS'], {
+    errorMap: () => ({ message: 'Measure type must be either WATER or GAS.' }),
+  }),
+})
 
 export const uploadImage = async (req: Request, res: Response) => {
   try {
-    const { imageBase64, customerCode, measureDatetime, measureType } = req.body
+    const validatedData = uploadImageSchema.safeParse(req.body)
 
-    // Verificar se a imagem base64 foi fornecida
-    if (!imageBase64 || typeof imageBase64 !== 'string') {
+    if (!validatedData.success) {
       return res.status(400).json({
         error_code: 'INVALID_DATA',
-        error_description: 'Base64 image data is required.',
+        error_description: validatedData.error.errors
+          .map((err) => err.message)
+          .join(', '),
       })
     }
 
-    // Validar os parâmetros adicionais
-    if (!isValidCustomerCode(customerCode)) {
-      return res.status(400).json({
-        error_code: 'INVALID_DATA',
-        error_description: 'Invalid customer code.',
-      })
-    }
+    const { image, customer_code, measure_datetime, measure_type } =
+      validatedData.data
 
-    if (!isValidDateTime(measureDatetime)) {
-      return res.status(400).json({
-        error_code: 'INVALID_DATA',
-        error_description: 'Invalid measure datetime.',
-      })
-    }
-
-    if (!isValidMeasureType(measureType)) {
-      return res.status(400).json({
-        error_code: 'INVALID_DATA',
-        error_description: 'Invalid measure type.',
-      })
-    }
-
-    // Fazer o upload da imagem para o Google e obter o URI
-    const uploadResponse = await uploadImageToGoogle(imageBase64)
-
-    if (!uploadResponse || !uploadResponse.uri) {
-      return res.status(500).json({
-        error_code: 'SERVER_ERROR',
-        error_description: 'Failed to upload image.',
-      })
-    }
-
-    // Analisar a imagem com Google Gemini
-    const analysisResult = await analyzeImageWithGoogleGemini(
-      uploadResponse.uri,
+    const startOfMonth = new Date(new Date(measure_datetime).setDate(1))
+    const endOfMonth = new Date(
+      new Date(measure_datetime).setMonth(startOfMonth.getMonth() + 1),
     )
 
-    if (!analysisResult || typeof analysisResult.numericValue !== 'number') {
-      return res.status(500).json({
-        error_code: 'SERVER_ERROR',
-        error_description: 'Failed to analyze image.',
-      })
-    }
-
-    const { numericValue } = analysisResult
-
-    // Verificar se já existe uma leitura do mês
-    const startOfMonth = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1,
-    )
     const existingReading = await prisma.reading.findFirst({
       where: {
-        type: measureType,
-        customerCode,
-        createdAt: {
+        customerCode: customer_code,
+        type: measure_type,
+        measureDatetime: {
           gte: startOfMonth,
+          lt: endOfMonth,
         },
       },
     })
@@ -95,30 +62,60 @@ export const uploadImage = async (req: Request, res: Response) => {
     if (existingReading) {
       return res.status(409).json({
         error_code: 'DOUBLE_REPORT',
-        error_description: 'Leitura do mês já realizada.',
+        error_description: 'Leitura do mês já realizada',
       })
     }
 
-    // Criar nova leitura
-    const newReading = await prisma.reading.create({
+    const imageBuffer = Buffer.from(image.split(',')[1], 'base64')
+
+    const tempFilePath = path.join(os.tmpdir(), `upload-${uuidv4()}.jpg`)
+    fs.writeFileSync(tempFilePath, imageBuffer)
+
+    const uploadResponse = await fileManager.uploadFile(tempFilePath, {
+      mimeType: 'image/jpeg',
+      displayName: 'Uploaded Image',
+    })
+
+    fs.unlinkSync(tempFilePath)
+
+    if (!uploadResponse || !uploadResponse.file.uri) {
+      return res.status(500).json({
+        error_code: 'SERVER_ERROR',
+        error_description: 'Failed to upload image.',
+      })
+    }
+
+    const fileUri = uploadResponse.file.uri
+
+    const analysisResult = await analyzeImageWithGoogleGemini(fileUri)
+    if (!analysisResult || typeof analysisResult.numericValue !== 'number') {
+      return res.status(500).json({
+        error_code: 'SERVER_ERROR',
+        error_description: 'Failed to analyze image.',
+      })
+    }
+
+    const measureUUID = uuidv4()
+    const numericValue = analysisResult.numericValue
+
+    await prisma.reading.create({
       data: {
-        uuid: uuidv4(),
-        type: measureType,
-        customerCode,
+        uuid: measureUUID,
+        customerCode: customer_code,
+        measureDatetime: new Date(measure_datetime),
+        type: measure_type,
         value: numericValue,
-        measureDatetime: new Date(measureDatetime),
-        imageUrl: uploadResponse.uri,
+        imageUrl: fileUri,
       },
     })
 
     res.status(200).json({
-      image_url: newReading.imageUrl,
-      measure_value: newReading.value,
-      measure_uuid: newReading.uuid,
+      image_url: fileUri,
+      measure_value: numericValue,
+      measure_uuid: measureUUID,
     })
   } catch (error) {
     console.error('Error processing image:', error)
-
     res.status(500).json({
       error_code: 'SERVER_ERROR',
       error_description: 'An unexpected server error occurred.',

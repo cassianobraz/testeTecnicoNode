@@ -5,9 +5,12 @@ const prisma = new PrismaClient()
 
 export const listCustom = async (req: Request, res: Response) => {
   const { customerCode } = req.params
-  const { measureType } = req.query
+  const { measure_type } = req.query
 
-  if (measureType && !['WATER', 'GAS'].includes(measureType as string)) {
+  if (
+    measure_type &&
+    ![ 'WATER', 'GAS' ].includes((measure_type as string).toUpperCase())
+  ) {
     return res.status(400).json({
       error_code: 'INVALID_TYPE',
       error_description: 'Tipo de medição não permitida',
@@ -18,11 +21,13 @@ export const listCustom = async (req: Request, res: Response) => {
     const measures = await prisma.reading.findMany({
       where: {
         customerCode,
-        ...(measureType ? { type: measureType as string } : {}),
+        ...(measure_type
+          ? { type: (measure_type as string).toUpperCase() }
+          : {}),
       },
     })
 
-    if (measures.length === 0) {
+    if (!Array.isArray(measures) || measures.length === 0) {
       return res.status(404).json({
         error_code: 'MEASURES_NOT_FOUND',
         error_description: 'Nenhuma leitura encontrada',
@@ -40,6 +45,7 @@ export const listCustom = async (req: Request, res: Response) => {
       })),
     })
   } catch (error) {
+    console.error('Error listing measures:', error)
     res.status(500).json({
       error_code: 'SERVER_ERROR',
       error_description: 'An unexpected server error occurred.',

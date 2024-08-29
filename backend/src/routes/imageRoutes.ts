@@ -9,4 +9,4 @@ router.post('/upload', uploadImage)
 
 router.patch('/confirm', confirmImage)
 
-router.get('/:customer_code/list', listCustom)
+router.get('/:customerCode/list', listCustom)

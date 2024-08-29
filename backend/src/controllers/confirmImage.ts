@@ -4,9 +4,9 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 export const confirmImage = async (req: Request, res: Response) => {
-  const { measureUuid, confirmedValue } = req.body
+  const { measure_uuid, confirmed_value } = req.body
 
-  if (typeof measureUuid !== 'string' || typeof confirmedValue !== 'number') {
+  if (typeof measure_uuid !== 'string' || typeof confirmed_value !== 'number') {
     return res.status(400).json({
       error_code: 'INVALID_DATA',
       error_description: 'Invalid data format.',
@@ -15,26 +15,26 @@ export const confirmImage = async (req: Request, res: Response) => {
 
   try {
     const reading = await prisma.reading.findUnique({
-      where: { uuid: measureUuid },
+      where: { uuid: measure_uuid },
     })
 
     if (!reading) {
       return res.status(404).json({
         error_code: 'MEASURE_NOT_FOUND',
-        error_description: 'Leitura não encontrada',
+        error_description: 'Leitura não encontrada.',
       })
     }
 
     if (reading.confirmedValue !== null) {
       return res.status(409).json({
         error_code: 'CONFIRMATION_DUPLICATE',
-        error_description: 'Leitura já confirmada',
+        error_description: 'Leitura já confirmada.',
       })
     }
 
     await prisma.reading.update({
-      where: { uuid: measureUuid },
-      data: { confirmedValue },
+      where: { uuid: measure_uuid },
+      data: { confirmedValue: confirmed_value },
     })
 
     res.status(200).json({ success: true })
