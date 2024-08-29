@@ -8,6 +8,6 @@ services:
       POSTGRES_USER: docker
       POSTGRES_PASSWORD: docker
       POSTGRES_DB: shopper
-      PGDATA: /data/bitnami/postgresql
+      PGDATA: /data/postgresql
     volumes: 
-      - ./data/pg:/data/bitnami/postgresql
+      - ./data/pg:/data/postgresql
