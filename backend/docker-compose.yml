@@ -1,12 +1,13 @@
 services: 
-  api-node-shopper:
-    image: bitnami/postgresql
+  postgres:
+    container_name: api-node-shopper
+    image: postgres
     ports: 
-      - "5432:5432"
+      - 5432:5432
     environment: 
-      - POSTGRESQL_USERNAME=docker
-      - POSTGRESQL_PASSWORD=docker
-      - POSTGRESQL_DATABASE=shopper
-      - PGDATA=/data/postgres
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+      POSTGRES_DB: shopper
+      PGDATA: /data/bitnami/postgresql
     volumes: 
-      - ./data/pg:/data/postgres
+      - ./data/pg:/data/bitnami/postgresql

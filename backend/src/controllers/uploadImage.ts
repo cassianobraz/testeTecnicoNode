@@ -1,16 +1,13 @@
 import { Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
 import { analyzeImageWithGoogleGemini } from '../services/googleGeminiService'
+import { uploadImageToGoogle } from '../services/googleFileService'
 import { v4 as uuidv4 } from 'uuid'
+import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-const isValidBase64Image = (image: unknown): boolean => {
-  return typeof image === 'string' && /^data:image\/\w+;base64,/.test(image)
-}
-
 const isValidMeasureType = (type: unknown): boolean => {
-  return ['WATER', 'GAS'].includes(type as string)
+  return [ 'WATER', 'GAS' ].includes(type as string)
 }
 
 const isValidCustomerCode = (code: unknown): boolean => {
@@ -23,15 +20,17 @@ const isValidDateTime = (datetime: unknown): boolean => {
 
 export const uploadImage = async (req: Request, res: Response) => {
   try {
-    const { image, customerCode, measureDatetime, measureType } = req.body
+    const { imageBase64, customerCode, measureDatetime, measureType } = req.body
 
-    if (!isValidBase64Image(image)) {
+    // Verificar se a imagem base64 foi fornecida
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
       return res.status(400).json({
         error_code: 'INVALID_DATA',
-        error_description: 'Invalid base64 image format.',
+        error_description: 'Base64 image data is required.',
       })
     }
 
+    // Validar os parâmetros adicionais
     if (!isValidCustomerCode(customerCode)) {
       return res.status(400).json({
         error_code: 'INVALID_DATA',
@@ -53,12 +52,36 @@ export const uploadImage = async (req: Request, res: Response) => {
       })
     }
 
+    // Fazer o upload da imagem para o Google e obter o URI
+    const uploadResponse = await uploadImageToGoogle(imageBase64)
+
+    if (!uploadResponse || !uploadResponse.uri) {
+      return res.status(500).json({
+        error_code: 'SERVER_ERROR',
+        error_description: 'Failed to upload image.',
+      })
+    }
+
+    // Analisar a imagem com Google Gemini
+    const analysisResult = await analyzeImageWithGoogleGemini(
+      uploadResponse.uri,
+    )
+
+    if (!analysisResult || typeof analysisResult.numericValue !== 'number') {
+      return res.status(500).json({
+        error_code: 'SERVER_ERROR',
+        error_description: 'Failed to analyze image.',
+      })
+    }
+
+    const { numericValue } = analysisResult
+
+    // Verificar se já existe uma leitura do mês
     const startOfMonth = new Date(
       new Date().getFullYear(),
       new Date().getMonth(),
       1,
     )
-
     const existingReading = await prisma.reading.findFirst({
       where: {
         type: measureType,
@@ -72,13 +95,11 @@ export const uploadImage = async (req: Request, res: Response) => {
     if (existingReading) {
       return res.status(409).json({
         error_code: 'DOUBLE_REPORT',
-        error_description: 'Leitura do mês já realizada',
+        error_description: 'Leitura do mês já realizada.',
       })
     }
 
-    const { numericValue, imageLink } =
-      await analyzeImageWithGoogleGemini(image)
-
+    // Criar nova leitura
     const newReading = await prisma.reading.create({
       data: {
         uuid: uuidv4(),
@@ -86,7 +107,7 @@ export const uploadImage = async (req: Request, res: Response) => {
         customerCode,
         value: numericValue,
         measureDatetime: new Date(measureDatetime),
-        imageUrl: imageLink,
+        imageUrl: uploadResponse.uri,
       },
     })
 
@@ -96,16 +117,11 @@ export const uploadImage = async (req: Request, res: Response) => {
       measure_uuid: newReading.uuid,
     })
   } catch (error) {
-    if (error instanceof Error) {
-      res.status(400).json({
-        error_code: 'INVALID_DATA',
-        error_description: error.message,
-      })
-    } else {
-      res.status(500).json({
-        error_code: 'SERVER_ERROR',
-        error_description: 'An unexpected server error occurred.',
-      })
-    }
+    console.error('Error processing image:', error)
+
+    res.status(500).json({
+      error_code: 'SERVER_ERROR',
+      error_description: 'An unexpected server error occurred.',
+    })
   }
 }

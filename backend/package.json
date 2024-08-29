@@ -15,11 +15,13 @@
   "license": "ISC",
   "dependencies": {
     "@google-cloud/storage": "^7.12.1",
+    "@google/generative-ai": "^0.17.1",
     "@prisma/client": "^5.19.0",
     "axios": "^1.7.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@rocketseat/eslint-config": "^2.2.2",
