@@ -6,10 +6,10 @@ POST {{baseUrl}}/upload
 Content-Type: application/json
 
 {
-  "imageUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAAD8GO2jAAAAC0lEQVR42mP8/wcAAwAB/1VZ6UAAAAABJRU5ErkJggg==",
-  "customerCode": "12345",
-  "measureDatetime": "2024-08-29T10:00:00Z",
-  "measureType": "WATER"
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAAAAAAAD/4QBaRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAA...",
+  "customer_code": "123456",
+  "measure_datetime": "2024-08-29T10:00:00Z",
+  "measure_type": "WATER"
 }
 
 ### Confirm or correct the value read by LLM
@@ -17,15 +17,14 @@ PATCH {{baseUrl}}/confirm
 Content-Type: application/json
 
 {
-  "measure_uuid": "1583d9ab-51d9-4807-a2bf-9a7f697b9b36",
+  "measure_uuid": "{uuid}",
   "confirmed_value": 123
 }
 
 ### Lists the measurements performed by a specific client
-### List measurements for a specific client
-GET {{baseUrl}}/{customer_code}/list?measure_type=GAS
+GET {{baseUrl}}/{customer_code}/list
 Accept: application/json
 
-### List measures for a specific customer without type filter
-GET {{baseUrl}}/{customer_code}/list
+### Testa erro 400 ao passar um measure_type inválido
+GET {{baseUrl}}/{customer_code}/list?measure_type=INVALID_TYPE
 Accept: application/json

@@ -30,6 +30,7 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^8.56.0",
     "prisma": "^5.19.0",
+    "supertest": "^7.0.0",
     "tsup": "^8.2.4",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
